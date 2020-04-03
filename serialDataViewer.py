@@ -6,7 +6,7 @@
 #
 #
 #Programm muss gestartet werden mit:
-#c:\Users\Melzer\Desktop>serielle-daten-anzeigen-besser.py COM4 115200
+#c:\Users\User\Desktop>serielle-daten-anzeigen-besser.py COM4 115200
 
 import numpy as np
 from scipy.stats import norm
@@ -160,11 +160,10 @@ class Scope(object):
         sigma = np.std(self.ydata)
         #varianz = np.var(self.ydata)
         mu = np.mean(self.ydata)
-        n, bins, patches = plt.hist(self.ydata, bins=self.dist_bins)
+        n, bins, patches = plt.hist(self.ydata, bins=self.dist_bins, density=True) #density -> normed distribution
         #y = mlab.normpdf( bins, mu, sigma) #old, not working
         y=norm.pdf( bins, mu, sigma) 
         l = plt.plot(bins, y, 'r--', linewidth=2)
-        
         #f=open("out.txt","a")
         print ("bins=", bins, file=open("dist-out.txt","a"))
         print ("werte=",n, file=open("dist-out.txt","a"))
