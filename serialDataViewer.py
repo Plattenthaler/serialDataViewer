@@ -18,17 +18,20 @@ from serial import Serial
 import sys
 from matplotlib.widgets import Slider, Button, RadioButtons, TextBox, CheckButtons
 
-
+from pysinewave import SineWave
 
         
         
 class Scope(object):
     def __init__(self, ax, maxt, dt, serialPort):
+        self.sinewave = SineWave(pitch = 5, pitch_per_second = 1000)
+        self.sinewave.play()
         self.serialPort = serialPort
         self.sendestatus = True #fuer toggeln der datenuebermittlung
+        self.ylinlog = False #status y-achsen skalierung in lin oder logarythmisch 
         self.ax = ax
         self.dt = dt
-        self.samples = 100 # wird durch submit uebernommen
+        self.samples = 10000 # wird durch submit uebernommen
         self.npoints = self.samples #sind die waren samples!
         self.gleitt = 0
         self.maxt = maxt
@@ -45,6 +48,7 @@ class Scope(object):
         self.ax.add_line(self.line_ymittel)
         self.ax.add_line(self.line_yval)
         self.ax.set_ylim(-.1, 10000.1)
+        #self.ax.set_yscale('log')
         self.ax.set_xlim(0, self.npoints)
         #erase outputdocuments
         #open("data-out.txt","w").close()
@@ -73,7 +77,7 @@ class Scope(object):
         self.samples_box =        TextBox(plt.axes([0.25, 0.005, 0.4, 0.04]), 'Samples', initial=str(self.samples))
         
         #checkbox
-        self.check = CheckButtons(plt.axes([0.72, 0.88, 0.1, 0.1]), ('Y-Auto', 'Data-out'), (True, False))
+        self.check = CheckButtons(plt.axes([0.72, 0.88, 0.1, 0.1]), ('Y-Auto', 'Data-out', 'Y-Log'), (True, False, False))
         
     def mess_toggle_event(self, event):
         self.sendestatus = not self.sendestatus
@@ -114,12 +118,18 @@ class Scope(object):
         except Exception as e:
             print(e)
     
-    def funktion(self, label) :
+    def funktion(self, label) : # Checkbox events
         if label == 'Y-Auto':
             self.autoadjust = not self.autoadjust
         elif label == 'Data-out':
             self.datenausgabe = not self.datenausgabe
-            
+        elif label == 'Y-Log':
+            self.ylinlog = not self.ylinlog
+            if self.ylinlog:
+                self.ax.set_yscale('log')
+            else:
+                self.ax.set_yscale('linear')
+            self.single_autorange
     def single_autorange(self, u):
         self.ax.set_ylim(min(self.ydata)-1,max(self.ydata)+1)
         self.ax.figure.canvas.draw()
@@ -203,14 +213,14 @@ class Scope(object):
             if inputline != "": #weil bestätigung leerer string ist
                 try:
                     if len(self.ydata)==1: #um initialen wert zu entfernen
-                        self.ydata[0]=(int(inputline)) # fuer hex int(inputline, 16)
+                        self.ydata[0]=100000/((int(inputline)+1)) # fuer hex int(inputline, 16)
                     
-                    self.ydata.append(int(inputline)) # fuer hex int(inputline, 16)
+                    self.ydata.append(100000/(int(inputline)+1)) # fuer hex int(inputline, 16)
                     self.tdata.append(self.tdata[-1] + 1)
                     if self.datenausgabe == True :
                         print(self.ydata[-1])
                         print(self.ydata[-1], file=open("data-out.txt","a"))
-                    
+                    self.sinewave.set_frequency(200000/(int(inputline)+1)+220)
                 except Exception as e:
                     print(e)
             else:
