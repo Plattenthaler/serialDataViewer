@@ -6,34 +6,51 @@
 #
 #
 #Programm muss gestartet werden mit:
-#c:\Users\User\Desktop>serielle-daten-anzeigen-besser.py COM4 115200
+#c:\Users\User\Desktop>serialDataViewer.py COM4 115200
+
+#Tested with: 
+#Python            3.8.1
+#
+#scipy             1.4.1
+#pysinewave        0.0.6
+#pyserial          3.5
+#matplotlib        3.4.2
+#numpy             1.20.3
 
 import numpy as np
-from scipy.stats import norm
+from   scipy.stats import norm
 from   matplotlib.lines import Line2D
+from   matplotlib.widgets import Slider, Button, RadioButtons, TextBox, CheckButtons
 import matplotlib.pyplot as plt
 import matplotlib.mlab   as mlab
 import matplotlib.animation as animation
-from serial import Serial
+from   serial import Serial
 import sys
-from matplotlib.widgets import Slider, Button, RadioButtons, TextBox, CheckButtons
+from   pysinewave import SineWave #fuer tonausgabe
 
-from pysinewave import SineWave
+
+def substring_after(s, delim):
+    return s.partition(delim)[2]
+
+def substring_before(s, delim):
+    return s.partition(delim)[0]
 
         
         
 class Scope(object):
     def __init__(self, ax, maxt, dt, serialPort):
         self.sinewave = SineWave(pitch = 5, pitch_per_second = 1000)
-        self.sinewave.play()
         self.serialPort = serialPort
         self.sendestatus = True #fuer toggeln der datenuebermittlung
         self.ylinlog = False #status y-achsen skalierung in lin oder logarythmisch 
+        self.tonausgabe = False #status der Tonausgabe
+        self.string_to_strip_after = ''
+        self.string_to_strip_bevore = 'placeholder'
         self.ax = ax
         self.dt = dt
-        self.samples = 10000 # wird durch submit uebernommen
+        self.samples = 150 # wird durch submit uebernommen
         self.npoints = self.samples #sind die waren samples!
-        self.gleitt = 0
+        self.gleitt = self.npoints
         self.maxt = maxt
         self.autoadjust = True
         self.datenausgabe = False
@@ -47,8 +64,7 @@ class Scope(object):
         self.line_yval = Line2D(self.tdata, self.ydata)
         self.ax.add_line(self.line_ymittel)
         self.ax.add_line(self.line_yval)
-        self.ax.set_ylim(-.1, 10000.1)
-        #self.ax.set_yscale('log')
+        self.ax.set_ylim(-.1, self.samples)
         self.ax.set_xlim(0, self.npoints)
         #erase outputdocuments
         #open("data-out.txt","w").close()
@@ -62,22 +78,24 @@ class Scope(object):
         self.skalierung_ymin = Slider(plt.axes([0.25, 0.05, 0.65, 0.02], facecolor=axcolor), 'Y Min', 10, 730.0 , valinit = 0)
                         
         #drueckbutton
-        self.mess_toggle_button =         Button(plt.axes([0.85, 0.95, 0.1, 0.04]), 'A-Mess', color=axcolor, hovercolor='0.975')
-        self.fft_button =                 Button(plt.axes([0.605, 0.91, 0.1, 0.04]), 'FFT', color=axcolor, hovercolor='0.975')
-        self.dist_button =                 Button(plt.axes([0.605, 0.87, 0.1, 0.04]), 'Dist', color=axcolor, hovercolor='0.975')
-        self.sent_button =                 Button(plt.axes([0.605, 0.95, 0.1, 0.04]), 'Senden', color=axcolor, hovercolor='0.975')
-        self.reset_button =                Button(plt.axes([0.85, 0.91, 0.1, 0.04]), 'Reset', color=axcolor, hovercolor='0.975')
-        self.single_autorange_button =    Button(plt.axes([0.85, 0.87, 0.1, 0.04]), '1x Y-auto', color=axcolor, hovercolor='0.975')
+        self.mess_toggle_button =        Button(plt.axes([0.85, 0.95, 0.1, 0.04]), 'A-Mess', color=axcolor, hovercolor='0.975')
+        self.fft_button =                Button(plt.axes([0.605, 0.91, 0.1, 0.04]), 'FFT', color=axcolor, hovercolor='0.975')
+        self.dist_button =               Button(plt.axes([0.605, 0.87, 0.1, 0.04]), 'Dist', color=axcolor, hovercolor='0.975')
+        self.sent_button =               Button(plt.axes([0.605, 0.95, 0.1, 0.04]), 'Senden', color=axcolor, hovercolor='0.975')
+        self.reset_button =              Button(plt.axes([0.85, 0.91, 0.1, 0.04]), 'Reset', color=axcolor, hovercolor='0.975')
+        self.single_autorange_button =   Button(plt.axes([0.85, 0.87, 0.1, 0.04]), '1x Y-auto', color=axcolor, hovercolor='0.975')
         self.submit1_button =            Button(plt.axes([0.655, 0.005, 0.1, 0.04]), 'Submit', color=axcolor, hovercolor='0.975')
         
         #Eingabezeile 
-        self.sent_box =         TextBox(plt.axes([0.2, 0.95,   0.4, 0.04]), 'Befehl', initial=self.sendetext)
-        self.fft_time_box =     TextBox(plt.axes([0.2, 0.91,   0.4, 0.04]), 'Sampletime ms', initial=str(self.fft_time))
-        self.dist_bins_box =     TextBox(plt.axes([0.2, 0.87,   0.4, 0.04]), 'N Bins', initial=str(self.dist_bins))
-        self.samples_box =        TextBox(plt.axes([0.25, 0.005, 0.4, 0.04]), 'Samples', initial=str(self.samples))
+        self.sent_box =                 TextBox(plt.axes([0.2, 0.95,   0.4, 0.04]), 'Befehl', initial=self.sendetext)
+        self.fft_time_box =             TextBox(plt.axes([0.2, 0.91,   0.4, 0.04]), 'Sampletime ms', initial=str(self.fft_time))
+        self.dist_bins_box =            TextBox(plt.axes([0.2, 0.87,   0.4, 0.04]), 'N Bins', initial=str(self.dist_bins))
+        self.string_strip_bevore_box =  TextBox(plt.axes([0.2, 0.83,   0.4, 0.04]), 'String after val', initial=self.string_to_strip_bevore)
+        self.string_strip_after_box =   TextBox(plt.axes([0.2, 0.79,   0.4, 0.04]), 'String bevore val', initial=self.string_to_strip_after)
+        self.samples_box =              TextBox(plt.axes([0.25, 0.005, 0.4, 0.04]), 'Samples', initial=str(self.samples))
         
         #checkbox
-        self.check = CheckButtons(plt.axes([0.72, 0.88, 0.1, 0.1]), ('Y-Auto', 'Data-out', 'Y-Log'), (True, False, False))
+        self.check = CheckButtons(plt.axes([0.72, 0.85, 0.11, 0.14]), ('Y-Auto', 'Data-out', 'Y-Log', 'Ton'), (True, False, False, False))
         
     def mess_toggle_event(self, event):
         self.sendestatus = not self.sendestatus
@@ -126,23 +144,33 @@ class Scope(object):
         elif label == 'Y-Log':
             self.ylinlog = not self.ylinlog
             if self.ylinlog:
-                self.ax.set_yscale('log')
+                self.ax.set_yscale('symlog')
             else:
                 self.ax.set_yscale('linear')
             self.single_autorange
+        elif label == 'Ton':
+            self.tonausgabe = not self.tonausgabe
+            if self.tonausgabe:
+                self.sinewave.play()
+            else:
+                self.sinewave.stop()
     def single_autorange(self, u):
-        self.ax.set_ylim(min(self.ydata)-1,max(self.ydata)+1)
-        self.ax.figure.canvas.draw()
+        self.ax.set_ylim(min(self.ydata)-(max(self.ydata)-min(self.ydata))/20,max(self.ydata)+(max(self.ydata)-min(self.ydata))/20)
     
     def submit_samples(self, u):
         self.npoints = self.samples # übernahme der werte von der eingabebox
         self.reset()
-    
+
+    def range_manuell_anpassen(self, u):
+        self.ax.set_ylim(10 ** (self.skalierung_ymin.val/100), 10 ** (self.skalierung_ymax.val/100))
+        self.ax.figure.canvas.draw()
+
     def range_anpassen(self, u):
         if self.autoadjust == True :
-            self.ax.set_ylim(min(self.ydata)-1,max(self.ydata)+1)
+            self.single_autorange(self)
         else:
-            self.ax.set_ylim(10 ** (self.skalierung_ymin.val/100), 10 ** (self.skalierung_ymax.val/100))
+            #self.ax.set_ylim(10 ** (self.skalierung_ymin.val/100), 10 ** (self.skalierung_ymax.val/100))
+            pass
         self.ax.figure.canvas.draw()
     
     def fft_erstellen(self, g=3):
@@ -165,7 +193,7 @@ class Scope(object):
         plt.grid()
         plt.show()
     
-    def dist_erstellen(self, g=3) :    
+    def dist_erstellen(self, g=3) :
         fig_verteilung, ax_verteilung = plt.subplots()
         sigma = np.std(self.ydata)
         #varianz = np.var(self.ydata)
@@ -203,41 +231,52 @@ class Scope(object):
         i = 0;
         while (self.serialPort.inWaiting() != 0) & (i<300):
             i +=1
-            inputline = self.serialPort.readline()
+            inputline = self.serialPort.readline()# read a '\n' terminated line otherwise timeout
             try:
                 inputline = inputline.decode('ascii').strip("\r\n")
             except Exception as e:
                 print(e)
-            #if self.datenausgabe == True :
-            #    print(inputline)
+
+            #String zuschneiden
+            try:
+                if self.string_strip_after_box.text!="" and self.string_strip_bevore_box.text != "":
+                    inputline=substring_after(inputline, self.string_strip_after_box.text)
+                    inputline=substring_before(inputline, self.string_strip_bevore_box.text)#self.string_strip_bevore_box #self.string_to_strip_bevore
+                #print(inputline)
+            except Exception as e:
+                print(e)
             if inputline != "": #weil bestätigung leerer string ist
                 try:
+                    #wert=100000/((int(inputline)+1)) #Test fuer Abstandssensor
+                    wert=int(inputline)
                     if len(self.ydata)==1: #um initialen wert zu entfernen
-                        self.ydata[0]=100000/((int(inputline)+1)) # fuer hex int(inputline, 16)
-                    
-                    self.ydata.append(100000/(int(inputline)+1)) # fuer hex int(inputline, 16)
+                        self.ydata[0]=wert
+                    self.ydata.append(wert)
                     self.tdata.append(self.tdata[-1] + 1)
                     if self.datenausgabe == True :
                         print(self.ydata[-1])
                         print(self.ydata[-1], file=open("data-out.txt","a"))
-                    self.sinewave.set_frequency(200000/(int(inputline)+1)+220)
+                    if self.tonausgabe== True :
+                        self.sinewave.set_frequency(wert*1.5+220)
                 except Exception as e:
                     print(e)
             else:
-                print("befehl uebertragen!")
+                #print("leerer string, befehl uebertragen!")
+                pass
             self.ydata     = self.ydata   [-1 * self.npoints:]
             self.tdata     = self.tdata   [-1 * self.npoints:]
         if self.tdata[-1] > self.gleitt:  # reset the arrays
             self.gleitt = self.tdata[-1] + self.npoints*0.1
             self.ax.set_xlim(self.tdata[0]+ self.npoints*0.1, self.tdata[-1] + self.npoints*0.1)
             if self.autoadjust == True :
-                self.ax.set_ylim(min(self.ydata)-1,max(self.ydata)+1)
+                self.range_anpassen(self)
             else:
-                self.ax.set_ylim(10 ** (self.skalierung_ymin.val/100), 10 ** (self.skalierung_ymax.val/100))
+                #self.ax.set_ylim(10 ** (self.skalierung_ymin.val/100), 10 ** (self.skalierung_ymax.val/100))
+                pass
             self.ax.figure.canvas.draw()
         if len(self.tdata)==10: #damit wertebreich zu beginn sinvoll angepasst wird
             if self.autoadjust == True :
-                self.ax.set_ylim(min(self.ydata)-1,max(self.ydata)+1)
+                self.range_anpassen(self)
                 self.ax.figure.canvas.draw()
         
         #Mittelwertbildung
@@ -262,9 +301,9 @@ def main(args = None):
         baudrate = int(args[2])
     
     fig, ax = plt.subplots()
-    fig.subplots_adjust(bottom=0.15, top=0.85)
+    fig.subplots_adjust(bottom=0.15, top=0.78)
     
-    scope = Scope(ax, 10, 0.01, Serial(port, baudrate))
+    scope = Scope(ax, 10, 0.01, Serial(port, baudrate, timeout=10)) # 10 sek timeout
     #scope = Scope(ax2, 10, 0.01, Serial(port, baudrate))
     
     #Button events
@@ -287,10 +326,11 @@ def main(args = None):
     scope.samples_box.on_submit(scope.textupdate_samples)
     
     #Slider-Events
-    scope.skalierung_ymin.on_changed(scope.range_anpassen)
-    scope.skalierung_ymax.on_changed(scope.range_anpassen)
+    scope.skalierung_ymin.on_changed(scope.range_manuell_anpassen)
+    scope.skalierung_ymax.on_changed(scope.range_manuell_anpassen)
     
     ani = animation.FuncAnimation(fig, scope.update, interval=20, blit=True)
+    scope.textupdate_samples
     plt.grid()
     plt.show()
     
