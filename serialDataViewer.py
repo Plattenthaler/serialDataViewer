@@ -26,6 +26,7 @@ import matplotlib.mlab   as mlab
 import matplotlib.animation as animation
 from   serial import Serial
 import sys
+import serial.tools.list_ports
 from   pysinewave import SineWave #fuer tonausgabe
 
 
@@ -247,8 +248,7 @@ class Scope(object):
                 print(e)
             if inputline != "": #weil bestätigung leerer string ist
                 try:
-                    #wert=100000/((int(inputline)+1)) #Test fuer Abstandssensor
-                    wert=int(inputline)
+                    wert=float(inputline) # war int, hoffe das macht keine probleme
                     if len(self.ydata)==1: #um initialen wert zu entfernen
                         self.ydata[0]=wert
                     self.ydata.append(wert)
@@ -294,16 +294,28 @@ def main(args = None):
 
     if args is None:
         args = sys.argv
-    port,baudrate = 'COM9', 115200
+    port,baudrate =  'COM6', 115200
+    print(args[0])
     if len(args) > 1:
         port = args[1]
     if len(args) > 2:
         baudrate = int(args[2])
-    
+    serial_port_connection=None
+    while(serial_port_connection==None): # Falls keine Verbindung aufgebaut werden kann, erneut nach Port fragen
+        try:
+            serial_port_connection=Serial(port, baudrate, timeout=10) # 10 sek timeout
+        except Exception as e:
+            print(e)
+            print("Available Ports:")
+            comportliste=serial.tools.list_ports.comports()
+            for entry in comportliste:
+                print(entry)
+            port=input("Enter Comport: eg \"COM4\"")
+            baudrate=int(input("Enter Baudrate: eg \"115200\""))
     fig, ax = plt.subplots()
     fig.subplots_adjust(bottom=0.15, top=0.78)
     
-    scope = Scope(ax, 10, 0.01, Serial(port, baudrate, timeout=10)) # 10 sek timeout
+    scope = Scope(ax, 10, 0.01, serial_port_connection) 
     #scope = Scope(ax2, 10, 0.01, Serial(port, baudrate))
     
     #Button events
