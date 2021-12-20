@@ -343,7 +343,9 @@ def main(args = None):
     
     ani = animation.FuncAnimation(fig, scope.update, interval=20, blit=True)
     scope.textupdate_samples
-    plt.grid()
+    g1 = ax.grid(b=True, which='major', color='k', linestyle='-', linewidth=0.5)
+    g2 = ax.grid(b=True, which='minor', color='k', linestyle='-', linewidth=0.2)
+    ax.minorticks_on()
     plt.show()
     
     return "das Programm ist nun zu ende"
