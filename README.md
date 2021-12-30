@@ -17,4 +17,4 @@ cx-Freeze         6.6
 
 Build Windows-exe:
 install cx_Freeze with "pip install --upgrade cx_Freeze"
-run "serialDataViewer_setup_to_exe.py build" (file generated with cxfreeze-quickstart)
+run "cxfreeze serialDataViewer_setup_to_exe.py" (file generated with cxfreeze-quickstart)
