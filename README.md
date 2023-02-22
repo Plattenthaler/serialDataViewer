@@ -8,12 +8,12 @@ standard Port COM9, changeable by starting with comandline "serialDataViewer.py 
 Tested with: 
 Python            3.8.1
 
-scipy             1.4.1
+scipy             1.10.1
 pysinewave        0.0.6
 pyserial          3.5
-matplotlib        3.4.2
-numpy             1.20.3
-cx-Freeze         6.6
+matplotlib        3.7.0
+numpy             1.24.2
+cx-Freeze         6.6 (6.14.4 installation error on Windows)
 
 Build Windows-exe:
 install cx_Freeze with "pip install --upgrade cx_Freeze"

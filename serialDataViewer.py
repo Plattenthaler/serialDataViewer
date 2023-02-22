@@ -280,7 +280,7 @@ class Scope(object):
                 self.ax.figure.canvas.draw()
         
         #Mittelwertbildung
-        self.line_ymittel.set_data(self.tdata, np.mean(self.ydata))
+        self.line_ymittel.set_data(self.tdata, [np.mean(self.ydata)])
         self.line_yval.set_data(self.tdata, self.ydata)
         
         return self.line_yval, self.line_ymittel,
@@ -311,7 +311,14 @@ def main(args = None):
             for entry in comportliste:
                 print(entry)
             port=input("Enter Comport: eg \"COM4\"")
-            baudrate=int(input("Enter Baudrate: eg \"115200\""))
+            if (port==""):
+                port="COM4"
+            try:
+                baudrate=int(input("Enter Baudrate: eg \"115200\" "))
+            except Exception as e:
+                print(e)
+                print("using 115200")
+                baudrate=115200
     fig, ax = plt.subplots()
     fig.subplots_adjust(bottom=0.15, top=0.78)
     
@@ -341,10 +348,10 @@ def main(args = None):
     scope.skalierung_ymin.on_changed(scope.range_manuell_anpassen)
     scope.skalierung_ymax.on_changed(scope.range_manuell_anpassen)
     
-    ani = animation.FuncAnimation(fig, scope.update, interval=20, blit=True)
+    ani = animation.FuncAnimation(fig, scope.update, interval=20, blit=True, save_count=500)
     scope.textupdate_samples
-    g1 = ax.grid(b=True, which='major', color='k', linestyle='-', linewidth=0.5)
-    g2 = ax.grid(b=True, which='minor', color='k', linestyle='-', linewidth=0.2)
+    g1 = ax.grid(visible=True, which='major', color='k', linestyle='-', linewidth=0.5)
+    g2 = ax.grid(visible=True, which='minor', color='k', linestyle='-', linewidth=0.2)
     ax.minorticks_on()
     plt.show()
     
