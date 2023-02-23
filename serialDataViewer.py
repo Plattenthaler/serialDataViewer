@@ -8,14 +8,15 @@
 #Programm muss gestartet werden mit:
 #c:\Users\User\Desktop>serialDataViewer.py COM4 115200
 
-#Tested with: 
-#Python            3.8.1
-#
-#scipy             1.4.1
-#pysinewave        0.0.6
-#pyserial          3.5
-#matplotlib        3.4.2
-#numpy             1.20.3
+# Tested with: 
+# Python            3.8.1
+
+# scipy             1.10.1
+# pysinewave        0.0.6
+# pyserial          3.5
+# matplotlib        3.7.0
+# numpy             1.24.2
+# cx-Freeze         6.6 (6.14.4 installation error on Windows)
 
 import numpy as np
 from   scipy.stats import norm
@@ -85,6 +86,7 @@ class Scope(object):
         self.sent_button =               Button(plt.axes([0.605, 0.95, 0.1, 0.04]), 'Senden', color=axcolor, hovercolor='0.975')
         self.reset_button =              Button(plt.axes([0.85, 0.91, 0.1, 0.04]), 'Reset', color=axcolor, hovercolor='0.975')
         self.single_autorange_button =   Button(plt.axes([0.85, 0.87, 0.1, 0.04]), '1x Y-auto', color=axcolor, hovercolor='0.975')
+        self.connect_button =            Button(plt.axes([0.85, 0.83, 0.1, 0.04]), 'Con/Disc', color=axcolor, hovercolor='0.975')
         self.submit1_button =            Button(plt.axes([0.655, 0.005, 0.1, 0.04]), 'Submit', color=axcolor, hovercolor='0.975')
         
         #Eingabezeile 
@@ -94,7 +96,7 @@ class Scope(object):
         self.string_strip_bevore_box =  TextBox(plt.axes([0.2, 0.83,   0.4, 0.04]), 'String after val', initial=self.string_to_strip_bevore)
         self.string_strip_after_box =   TextBox(plt.axes([0.2, 0.79,   0.4, 0.04]), 'String bevore val', initial=self.string_to_strip_after)
         self.samples_box =              TextBox(plt.axes([0.25, 0.005, 0.4, 0.04]), 'Samples', initial=str(self.samples))
-        
+        self.serial_status_text =       TextBox(plt.axes([0.605, 0.79,   0.345, 0.04]), '')
         #checkbox
         self.check = CheckButtons(plt.axes([0.72, 0.85, 0.11, 0.14]), ('Y-Auto', 'Data-out', 'Y-Log', 'Ton'), (True, False, False, False))
         
@@ -215,6 +217,43 @@ class Scope(object):
         #plt.axis([0, 10000, 0, 10])
         plt.grid(True)
         plt.show()
+    
+    def serial_connect(self, u=0):
+        if (self.serialPort.isOpen()): # isOpen is deprecated but working
+            self.serialPort.close()
+            print("serial "+str(self.serialPort.port)+" closed")
+        else:
+            try:
+                con_text=self.serial_status_text.text
+                self.serialPort.port = substring_before(con_text, ",")
+                baudrate = substring_before(con_text, ":")
+                baudrate = substring_after(baudrate, ", ")
+                self.serialPort.baudrate = baudrate
+                self.serialPort.open()
+                print("connect")
+            except Exception as e:
+                print(e)
+                print("-")
+                print("-")
+                print("-")
+                print("Available Ports:")
+                comportliste=serial.tools.list_ports.comports()
+                for entry in comportliste:
+                    print(entry)
+        self.check_connection() 
+        
+    def check_connection(self):
+        # ser.is_open returns also True, if the connection was (externaly) interrupted
+        ser_is_open = False
+        try:
+            self.serialPort.inWaiting()
+            ser_is_open = True
+        except:
+            ser_is_open = False
+        if (ser_is_open):
+                self.serial_status_text.set_val(str(self.serialPort.port + ", " + str(self.serialPort.baudrate) + ": Connected"))
+        else:
+            self.serial_status_text.set_val(str(self.serialPort.port + ", " + str(self.serialPort.baudrate) + ": Disconnected"))
         
     def reset(self, g=0):
         mittelwert=np.mean(self.ydata)
@@ -230,9 +269,22 @@ class Scope(object):
     
     def update(self, i):
         i = 0;
-        while (self.serialPort.inWaiting() != 0) & (i<300):
+        in_waiting = 0
+        try: #Check the serial communication
+            in_waiting = self.serialPort.inWaiting()
+        except Exception as e:
+            #print(e)
+            self.check_connection()
+            return self.line_yval, self.line_ymittel
+            
+        while (in_waiting != 0) & (i<300):
             i +=1
-            inputline = self.serialPort.readline()# read a '\n' terminated line otherwise timeout
+            
+            try:
+                inputline = self.serialPort.readline()# read a '\n' terminated line otherwise timeout
+                in_waiting = self.serialPort.inWaiting()
+            except Exception as e:
+                print(e)  
             try:
                 inputline = inputline.decode('ascii').strip("\r\n")
             except Exception as e:
@@ -285,8 +337,6 @@ class Scope(object):
         
         return self.line_yval, self.line_ymittel,
 
-
-
 # Fixing random state for reproducibility
 np.random.seed(19680801)
 
@@ -294,37 +344,24 @@ def main(args = None):
 
     if args is None:
         args = sys.argv
-    port,baudrate =  'COM6', 115200
+    port,baudrate =  'COM4', 115200
     print(args[0])
     if len(args) > 1:
         port = args[1]
     if len(args) > 2:
         baudrate = int(args[2])
-    serial_port_connection=None
-    while(serial_port_connection==None): # Falls keine Verbindung aufgebaut werden kann, erneut nach Port fragen
-        try:
-            serial_port_connection=Serial(port, baudrate, timeout=10) # 10 sek timeout
-        except Exception as e:
-            print(e)
-            print("Available Ports:")
-            comportliste=serial.tools.list_ports.comports()
-            for entry in comportliste:
-                print(entry)
-            port=input("Enter Comport: eg \"COM4\"")
-            if (port==""):
-                port="COM4"
-            try:
-                baudrate=int(input("Enter Baudrate: eg \"115200\" "))
-            except Exception as e:
-                print(e)
-                print("using 115200")
-                baudrate=115200
+    serial_port_connection=Serial()
+    serial_port_connection.port = port
+    serial_port_connection.baudrate = baudrate
+    serial_port_connection.timeout = 10
+        
     fig, ax = plt.subplots()
     fig.subplots_adjust(bottom=0.15, top=0.78)
     
-    scope = Scope(ax, 10, 0.01, serial_port_connection) 
-    #scope = Scope(ax2, 10, 0.01, Serial(port, baudrate))
-    
+    scope = Scope(ax, 10, 0.01, serial_port_connection)
+    scope.check_connection()
+    scope.serial_connect()
+
     #Button events
     scope.fft_button.on_clicked(scope.fft_erstellen)
     scope.dist_button.on_clicked(scope.dist_erstellen)
@@ -332,12 +369,12 @@ def main(args = None):
     scope.sent_button.on_clicked(scope.sent)
     scope.reset_button.on_clicked(scope.reset)
     scope.single_autorange_button.on_clicked(scope.single_autorange)
+    scope.connect_button.on_clicked(scope.serial_connect)
     scope.submit1_button.on_clicked(scope.submit_samples)
     
     #Checkbox Events
     scope.check.on_clicked(scope.funktion)
-    
-    
+      
     #Text-Events
     scope.sent_box.on_submit(scope.textupdate_sent)
     scope.fft_time_box.on_submit(scope.textupdate_fft_time)
