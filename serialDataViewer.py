@@ -270,16 +270,18 @@ class Scope(object):
     def update(self, i):
         i = 0;
         in_waiting = 0
+        data_available = 0
         try: #Check the serial communication
             in_waiting = self.serialPort.inWaiting()
         except Exception as e:
             #print(e)
             self.check_connection()
             return self.line_yval, self.line_ymittel
-            
-        while (in_waiting != 0) & (i<300):
-            i +=1
-            
+        read_data_len = 1000
+        ydata = np.empty(read_data_len+1)
+        #tdata[350]  
+        #tdata[0] = self.tdata[-1] + 1
+        while (in_waiting != 0) & (i<read_data_len):         
             try:
                 inputline = self.serialPort.readline()# read a '\n' terminated line otherwise timeout
                 in_waiting = self.serialPort.inWaiting()
@@ -301,13 +303,12 @@ class Scope(object):
             if inputline != "": #weil bestätigung leerer string ist
                 try:
                     wert=float(inputline) # war int, hoffe das macht keine probleme
-                    if len(self.ydata)==1: #um initialen wert zu entfernen
-                        self.ydata[0]=wert
-                    self.ydata.append(wert)
-                    self.tdata.append(self.tdata[-1] + 1)
+                    ydata[i] = wert
+                    data_available +=1
+                    #self.tdata.append(self.tdata[-1] + 1)
                     if self.datenausgabe == True :
-                        print(self.ydata[-1])
-                        print(self.ydata[-1], file=open("data-out.txt","a"))
+                        print(wert)
+                        print(wert, file=open("data-out.txt","a"))
                     if self.tonausgabe== True :
                         self.sinewave.set_frequency(wert*1.5+220)
                 except Exception as e:
@@ -315,8 +316,20 @@ class Scope(object):
             else:
                 #print("leerer string, befehl uebertragen!")
                 pass
-            self.ydata     = self.ydata   [-1 * self.npoints:]
-            self.tdata     = self.tdata   [-1 * self.npoints:]
+            i +=1
+        
+        if(data_available > 0):
+            if (data_available>read_data_len*0.7):
+                print("too much data", data_available)
+            if len(self.ydata)==1: #um initialen wert zu entfernen
+                self.ydata[0]=ydata[0]        
+            
+            self.ydata.extend(ydata[0:i].tolist())
+            self.tdata.extend(np.arange(self.tdata[-1]+1,self.tdata[-1]+i+1).tolist())
+               
+            self.ydata     = self.ydata   [-1 * self.npoints:]   # Auf bereich anpassen
+            self.tdata     = self.tdata   [-1 * self.npoints:]   # Auf bereich anpassen
+            
         if self.tdata[-1] > self.gleitt:  # reset the arrays
             self.gleitt = self.tdata[-1] + self.npoints*0.1
             self.ax.set_xlim(self.tdata[0]+ self.npoints*0.1, self.tdata[-1] + self.npoints*0.1)
@@ -385,7 +398,7 @@ def main(args = None):
     scope.skalierung_ymin.on_changed(scope.range_manuell_anpassen)
     scope.skalierung_ymax.on_changed(scope.range_manuell_anpassen)
     
-    ani = animation.FuncAnimation(fig, scope.update, interval=20, blit=True, save_count=500)
+    ani = animation.FuncAnimation(fig, scope.update, interval=50, blit=True, save_count=500)
     scope.textupdate_samples
     g1 = ax.grid(visible=True, which='major', color='k', linestyle='-', linewidth=0.5)
     g2 = ax.grid(visible=True, which='minor', color='k', linestyle='-', linewidth=0.2)
