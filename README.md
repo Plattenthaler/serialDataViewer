@@ -18,3 +18,10 @@ cx-Freeze         6.6 (6.14.4 installation error on Windows)
 Build Windows-exe:
 install cx_Freeze with "pip install --upgrade cx_Freeze"
 run "cxfreeze serialDataViewer_setup_to_exe.py" (file generated with cxfreeze-quickstart)
+
+# Git Hooks
+
+copy the two files "post-commit" and "post-checkout" from the folder git-hooks into your local folder .git\hooks\
+This will change the content of the file version.py. If there are no git hooks, default version strings are used.
+
+before V1.2 the standart process was to commit a default version of the version file and remove the file from tracking with "git update-index --assume-unchanged <file>"

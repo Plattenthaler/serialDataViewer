@@ -19,7 +19,7 @@
 # cx-Freeze         6.6 (6.14.4 installation error on Windows)
 
 import numpy as np
-from   scipy.stats import norm
+#from   scipy.stats import norm
 from   matplotlib.lines import Line2D
 from   matplotlib.widgets import Slider, Button, RadioButtons, TextBox, CheckButtons
 import matplotlib.pyplot as plt
@@ -213,8 +213,9 @@ class Scope(object):
         mu = np.mean(self.ydata)
         n, bins, patches = plt.hist(self.ydata, bins=self.dist_bins, density=True) #density -> normed distribution
         #y = mlab.normpdf( bins, mu, sigma) #old, not working
-        y=norm.pdf( bins, mu, sigma) 
-        l = plt.plot(bins, y, 'r--', linewidth=2)
+        gausverteilung =  1/(sigma * np.sqrt(2 * np.pi)) * np.exp( - (bins - mu)**2 / (2 * sigma**2) ) 
+        l = plt.plot(bins, gausverteilung, 'r--', linewidth=2)
+        
         #f=open("out.txt","a")
         print ("bins=", bins, file=open("dist-out.txt","a"))
         print ("werte=",n, file=open("dist-out.txt","a"))
@@ -367,7 +368,7 @@ def main(args = None):
     
     version_string = "Serial Data Viewer by Sebastian Melzer | Version: " + Version().string_firsttag
     print(version_string)
-    print(Version().string_reltag)
+    print("GIT-Tag: ",Version().string_reltag)
     
     if args is None:
         args = sys.argv
