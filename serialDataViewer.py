@@ -36,6 +36,16 @@ def substring_after(s, delim):
 
 def substring_before(s, delim):
     return s.partition(delim)[0]
+    
+
+try:
+    from version import Version
+except Exception:
+    class Version:
+        def __init__(self):
+            self.string_firsttag = "X.X-update-git-hooks"
+            self.string_reltag = "X.X-0-ffffffff"
+
 
         
         
@@ -354,7 +364,11 @@ class Scope(object):
 np.random.seed(19680801)
 
 def main(args = None):
-
+    
+    version_string = "Serial Data Viewer by Sebastian Melzer | Version: " + Version().string_firsttag
+    print(version_string)
+    print(Version().string_reltag)
+    
     if args is None:
         args = sys.argv
     port,baudrate =  'COM4', 115200
@@ -368,7 +382,7 @@ def main(args = None):
     serial_port_connection.baudrate = baudrate
     serial_port_connection.timeout = 10
         
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(num=version_string)
     fig.subplots_adjust(bottom=0.15, top=0.78)
     
     scope = Scope(ax, 10, 0.01, serial_port_connection)

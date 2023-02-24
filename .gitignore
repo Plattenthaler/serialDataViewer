@@ -3,6 +3,7 @@ data-out.txt
 dist-out.txt
 fft-out.txt
 ignore
+version.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
