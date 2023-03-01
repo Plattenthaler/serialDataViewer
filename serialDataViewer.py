@@ -64,7 +64,7 @@ class Scope(object):
         self.ylinlog = False #status y-achsen skalierung in lin oder logarythmisch 
         self.tonausgabe = False #status der Tonausgabe
         self.string_to_strip_after = ''
-        self.string_to_strip_bevore = 'placeholder'
+        self.string_to_strip_before = 'placeholder'
         self.ax_L = ax
         self.ax_L.tick_params(axis='y', colors='blue')
         self.ax_R = self.ax_L.twinx()
@@ -123,8 +123,8 @@ class Scope(object):
         self.sent_box =                 TextBox(plt.axes([0.2, 0.95,   0.4, 0.04]), 'Befehl', initial=self.sendetext)
         self.fft_time_box =             TextBox(plt.axes([0.2, 0.91,   0.4, 0.04]), 'Sampletime ms', initial=str(self.fft_time))
         self.dist_bins_box =            TextBox(plt.axes([0.2, 0.87,   0.4, 0.04]), 'N Bins', initial=str(self.dist_bins))
-        self.string_strip_bevore_box =  TextBox(plt.axes([0.2, 0.83,   0.4, 0.04]), 'String after val', initial=self.string_to_strip_bevore)
-        self.string_strip_after_box =   TextBox(plt.axes([0.2, 0.79,   0.4, 0.04]), 'String bevore val', initial=self.string_to_strip_after)
+        self.string_strip_before_box =  TextBox(plt.axes([0.2, 0.83,   0.4, 0.04]), 'String after val', initial=self.string_to_strip_before)
+        self.string_strip_after_box =   TextBox(plt.axes([0.2, 0.79,   0.4, 0.04]), 'String before val', initial=self.string_to_strip_after)
         self.samples_box =              TextBox(plt.axes([0.25, 0.005, 0.4, 0.04]), 'Samples', initial=str(self.samples))
         self.serial_status_text =       TextBox(plt.axes([0.605, 0.79,   0.345, 0.04]), '')
         #checkbox
@@ -367,9 +367,10 @@ class Scope(object):
 
             #String zuschneiden
             try:
-                if self.string_strip_after_box.text!="" and self.string_strip_bevore_box.text != "":
+                if self.string_strip_after_box.text!="":
                     inputline=substring_after(inputline, self.string_strip_after_box.text)
-                    inputline=substring_before(inputline, self.string_strip_bevore_box.text)#self.string_strip_bevore_box #self.string_to_strip_bevore
+                if self.string_strip_before_box.text != "":
+                    inputline=substring_before(inputline, self.string_strip_before_box.text)#self.string_strip_before_box #self.string_to_strip_before
                 #print(inputline)
             except Exception as e:
                 print(e)
@@ -379,8 +380,11 @@ class Scope(object):
                         wert_L=float(inputline) # war int, hoffe das macht keine probleme
                         wert_R=float('nan')
                     else:
-                        wert_L=float(inputline[:inputline.find(";")])
-                        wert_R=float(inputline[inputline.find(";")+1:])
+                        in_line_sp = inputline.split(";")
+                        wert_L=float(in_line_sp[0])
+                        wert_R=float(in_line_sp[1])
+                        if(len(in_line_sp)>2):
+                            print(in_line_sp[2:])
                         
                     ydata_L[i] = wert_L
                     ydata_R[i] = wert_R
