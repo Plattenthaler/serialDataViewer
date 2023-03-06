@@ -43,7 +43,24 @@ def numpy_nan_mean(a):
         return np.NaN 
     else:
         return np.nanmean(a)
-    
+
+# Mouse tracking diplay left and right values in navigation bar for datetime64
+# # https://stackoverflow.com/questions/21583965/matplotlib-cursor-value-with-two-axes/53678689
+def make_format(current, other):
+    # current and other are axes
+    def format_coord(x, y):
+        # x, y are data coordinates
+        # convert to display coords
+        display_coord = current.transData.transform((x,y))
+        inv = other.transData.inverted()
+        # convert back to data coords with respect to ax
+        ax_coord = inv.transform(display_coord)
+        coords = [ax_coord, (x, y)]
+        string = ("{:.2f}, ".format(x))
+        string += ('{}, {}'.format(*['{:.3f}'.format(y) for x,y in coords]))
+        return string
+
+    return format_coord    
 
 try:
     from version import Version
@@ -68,6 +85,7 @@ class Scope(object):
         self.ax_L = ax
         self.ax_L.tick_params(axis='y', colors='blue')
         self.ax_R = self.ax_L.twinx()
+        self.ax_R.format_coord = make_format(self.ax_R, self.ax_L)
         self.ax_R.tick_params(axis='y', colors='red')
         self.dt = dt
         self.samples = 500 # wird durch submit uebernommen
@@ -321,10 +339,10 @@ class Scope(object):
         if (ser_is_open):
                 self.serial_status_text.set_val(str(self.serialPort.port + ", " + str(self.serialPort.baudrate) + ": Connected"))
         else:
-            self.serial_status_text.set_val(str(self.serialPort.port + ", " + str(self.serialPort.baudrate) + ": Disconnected"))
-        
-    def reset(self, g=0):
+            if(self.serial_status_text.text[-12:].find("Disconnected")<0): # just update this text once. Otherwise no external textupdate is possiblly. 
+                self.serial_status_text.set_val(str(self.serialPort.port + ", " + str(self.serialPort.baudrate) + ": Disconnected"))
 
+    def reset(self, g=0):
         #2 Daten anhaengen, damit auto x-einstellung funktioniert
         self.tdata.append(0)
         self.ydata_L.append(np.nanmean(self.ydata_L))
