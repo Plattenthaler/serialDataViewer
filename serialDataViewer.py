@@ -56,8 +56,10 @@ def make_format(current, other):
         # convert back to data coords with respect to ax
         ax_coord = inv.transform(display_coord)
         coords = [ax_coord, (x, y)]
-        string = ("{:.2f}, ".format(x))
-        string += ('{}, {}'.format(*['{:.3f}'.format(y) for x,y in coords]))
+        string = str(round(x,2))+ " : "
+        #print(coords)
+        for x_, y_  in coords:
+            string += str(round(y_, 3)) + "; "
         return string
 
     return format_coord    
@@ -98,7 +100,7 @@ class Scope(object):
         self.dist_bins = 50 #Aufloesung der Verteilungsfunktion
         self.fft_time = 10 #in ms
         self.tdata = [0]
-        self.ydata_L = [0]
+        self.ydata_L = [np.nan]
         self.ydata_R = [np.nan]
         self.y_mittel_L = [0]
         self.y_mittel_R = [np.nan]
@@ -232,17 +234,17 @@ class Scope(object):
                 self.sinewave.stop()
     
     def single_autorange(self, u=0):
-        ylim_min_l = min(self.ydata_L)-(max(self.ydata_L)-min(self.ydata_L))/20
-        ylim_max_l = max(self.ydata_L)+(max(self.ydata_L)-min(self.ydata_L))/20
+        ylim_min_l = np.nanmin(self.ydata_L)-(np.nanmax(self.ydata_L)-np.nanmin(self.ydata_L))/20
+        ylim_max_l = np.nanmax(self.ydata_L)+(np.nanmax(self.ydata_L)-np.nanmin(self.ydata_L))/20
         if not(np.isnan(ylim_max_l)) and not(np.isnan(ylim_min_l)):
             if ylim_max_l != ylim_min_l:
                 self.ax_L.set_ylim(ylim_min_l,ylim_max_l)
-        ylim_min_r = min(self.ydata_R)-(max(self.ydata_R)-min(self.ydata_R))/20
-        ylim_max_r = max(self.ydata_R)+(max(self.ydata_R)-min(self.ydata_R))/20
+        ylim_min_r = np.nanmin(self.ydata_R)-(np.nanmax(self.ydata_R)-np.nanmin(self.ydata_R))/20
+        ylim_max_r = np.nanmax(self.ydata_R)+(np.nanmax(self.ydata_R)-np.nanmin(self.ydata_R))/20
         if not(np.isnan(ylim_max_r)) and not(np.isnan(ylim_min_r)):
             if ylim_max_r != ylim_min_r:
                 self.ax_R.set_ylim(ylim_min_r,ylim_max_r)
-    
+        
     def submit_samples(self, u=0):
         self.npoints = self.samples # übernahme der werte von der eingabebox
         self.reset()
@@ -339,7 +341,7 @@ class Scope(object):
         if (ser_is_open):
                 self.serial_status_text.set_val(str(self.serialPort.port + ", " + str(self.serialPort.baudrate) + ": Connected"))
         else:
-            if(self.serial_status_text.text[-12:].find("Disconnected")<0): # just update this text once. Otherwise no external textupdate is possiblly. 
+            if(self.serial_status_text.text.find("Disconnected")<0): # just update this text once. Otherwise no external textupdate is possiblly. 
                 self.serial_status_text.set_val(str(self.serialPort.port + ", " + str(self.serialPort.baudrate) + ": Disconnected"))
 
     def reset(self, g=0):
@@ -369,9 +371,9 @@ class Scope(object):
         read_data_len = 1000
         ydata_L = np.empty(read_data_len+1)
         ydata_R = np.empty(read_data_len+1)
+        ydata_L[:] = np.nan
+        ydata_R[:] = np.nan
         
-        #tdata[350]  
-        #tdata[0] = self.tdata[-1] + 1
         while (in_waiting != 0) & (i<read_data_len):         
             try:
                 inputline = self.serialPort.readline()# read a '\n' terminated line otherwise timeout
@@ -403,11 +405,10 @@ class Scope(object):
                         wert_R=float(in_line_sp[1])
                         if(len(in_line_sp)>2):
                             print(in_line_sp[2:])
-                        
+
                     ydata_L[i] = wert_L
                     ydata_R[i] = wert_R
                     data_available +=1
-                    #self.tdata.append(self.tdata[-1] + 1)
                     if self.tonausgabe== True :
                         self.sinewave.set_frequency(wert_L*1.5+220)
                 except Exception as e:
@@ -436,7 +437,7 @@ class Scope(object):
             self.ydata_L.extend(ydata_L[0:i].tolist())
             self.ydata_R.extend(ydata_R[0:i].tolist())
             self.tdata.extend(np.arange(self.tdata[-1]+1,self.tdata[-1]+i+1).tolist())
-               
+            
             self.ydata_L     = self.ydata_L   [-1 * self.npoints:]   # Auf bereich anpassen
             self.ydata_R     = self.ydata_R   [-1 * self.npoints:]   # Auf bereich anpassen
             self.tdata     = self.tdata   [-1 * self.npoints:]   # Auf bereich anpassen
