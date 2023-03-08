@@ -29,6 +29,7 @@ from   serial import Serial
 import sys
 import serial.tools.list_ports
 from   pysinewave import SineWave #fuer tonausgabe
+import warnings #supress np warnings
 
 
 def substring_after(s, delim):
@@ -100,7 +101,7 @@ class Scope(object):
         self.dist_bins = 50 #Aufloesung der Verteilungsfunktion
         self.fft_time = 10 #in ms
         self.tdata = [0]
-        self.ydata_L = [np.nan]
+        self.ydata_L = [0]
         self.ydata_R = [np.nan]
         self.y_mittel_L = [0]
         self.y_mittel_R = [np.nan]
@@ -234,16 +235,18 @@ class Scope(object):
                 self.sinewave.stop()
     
     def single_autorange(self, u=0):
-        ylim_min_l = np.nanmin(self.ydata_L)-(np.nanmax(self.ydata_L)-np.nanmin(self.ydata_L))/20
-        ylim_max_l = np.nanmax(self.ydata_L)+(np.nanmax(self.ydata_L)-np.nanmin(self.ydata_L))/20
-        if not(np.isnan(ylim_max_l)) and not(np.isnan(ylim_min_l)):
-            if ylim_max_l != ylim_min_l:
-                self.ax_L.set_ylim(ylim_min_l,ylim_max_l)
-        ylim_min_r = np.nanmin(self.ydata_R)-(np.nanmax(self.ydata_R)-np.nanmin(self.ydata_R))/20
-        ylim_max_r = np.nanmax(self.ydata_R)+(np.nanmax(self.ydata_R)-np.nanmin(self.ydata_R))/20
-        if not(np.isnan(ylim_max_r)) and not(np.isnan(ylim_min_r)):
-            if ylim_max_r != ylim_min_r:
-                self.ax_R.set_ylim(ylim_min_r,ylim_max_r)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning) # suppress numpy warnig: "All-NaN axis encountered" raised if empty y-datta is given
+            ylim_min_l = np.nanmin(self.ydata_L)-(np.nanmax(self.ydata_L)-np.nanmin(self.ydata_L))/20
+            ylim_max_l = np.nanmax(self.ydata_L)+(np.nanmax(self.ydata_L)-np.nanmin(self.ydata_L))/20
+            if not(np.isnan(ylim_max_l)) and not(np.isnan(ylim_min_l)):
+                if ylim_max_l != ylim_min_l:
+                    self.ax_L.set_ylim(ylim_min_l,ylim_max_l)
+            ylim_min_r = np.nanmin(self.ydata_R)-(np.nanmax(self.ydata_R)-np.nanmin(self.ydata_R))/20
+            ylim_max_r = np.nanmax(self.ydata_R)+(np.nanmax(self.ydata_R)-np.nanmin(self.ydata_R))/20
+            if not(np.isnan(ylim_max_r)) and not(np.isnan(ylim_min_r)):
+                if ylim_max_r != ylim_min_r:
+                    self.ax_R.set_ylim(ylim_min_r,ylim_max_r)
         
     def submit_samples(self, u=0):
         self.npoints = self.samples # übernahme der werte von der eingabebox
@@ -348,7 +351,10 @@ class Scope(object):
         #2 Daten anhaengen, damit auto x-einstellung funktioniert
         self.tdata.append(0)
         self.ydata_L.append(np.nanmean(self.ydata_L))
-        self.ydata_R.append(np.nanmean(self.ydata_R))
+        if len(self.ydata_R) == np.count_nonzero(~np.isnan(self.ydata_L)): # suppress runtimewarning mean over empty array
+            self.ydata_R.append(np.nanmean(self.ydata_R))
+        else:
+            self.ydata_R.append(0)
         del self.tdata[:-1  ]
         del self.ydata_L [:-1]
         del self.ydata_R [:-1]
