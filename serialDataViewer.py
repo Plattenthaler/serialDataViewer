@@ -30,7 +30,20 @@ import sys
 import serial.tools.list_ports
 from   pysinewave import SineWave #fuer tonausgabe
 import warnings #supress np warnings
+import os
 
+
+def check_write_permission():
+    write_permition = False
+    try:
+        file=open("test.txt","a")
+        file.close()
+        os.remove("test.txt")
+        write_permition = True
+    except Exception as e:
+        print(e)
+        write_permition = False
+    return write_permition
 
 def substring_after(s, delim):
     return s.partition(delim)[2]
@@ -80,6 +93,7 @@ class Scope(object):
     def __init__(self, ax, maxt, dt, serialPort):
         self.sinewave = SineWave(pitch = 5, pitch_per_second = 1000)
         self.serialPort = serialPort
+        self.write_permission = check_write_permission()
         self.sendestatus = True #fuer toggeln der datenuebermittlung
         self.ylinlog = False #status y-achsen skalierung in lin oder logarythmisch 
         self.tonausgabe = False #status der Tonausgabe
@@ -123,6 +137,7 @@ class Scope(object):
         self.init_user_elements()
         self.check_connection()
         self.serial_connect()
+        print("write permission: ",self.write_permission)
         
     def init_user_elements(self):    
         #die slider
@@ -297,9 +312,13 @@ class Scope(object):
         l = plt.plot(bins, gausverteilung, 'r--', linewidth=2)
         
         #f=open("out.txt","a")
-        print ("bins=", bins, file=open("dist-out.txt","a"))
-        print ("werte=",n, file=open("dist-out.txt","a"))
-        print ("patches=",patches, file=open("dist-out.txt","a"))
+        try:
+            if(self.write_permission):
+                print ("bins=", bins, file=open("dist-out.txt","a"))
+                print ("werte=",n, file=open("dist-out.txt","a"))
+                print ("patches=",patches, file=open("dist-out.txt","a"))
+        except Exception as e:
+            print(e)
         #f.close()
         
         #ax_verteilung.set_title("Verteilung mit sigm: " + str(standartabweichung) + " Varianz: " + str(varianz) + " und Mittelwert: " + str(mittelwert)) 
@@ -438,7 +457,8 @@ class Scope(object):
                 for ausg_i in range(i):
                     ausgabetext += str(ydata_L[ausg_i])+ "\t"+str(ydata_R[ausg_i])+"\r\n"
                 print(ausgabetext[:ausgabetext.find("\r")])
-                print(ausgabetext, file=open("data-out.txt","a"))
+                if(self.write_permission):
+                    print(ausgabetext, file=open("data-out.txt","a"))
             
             self.ydata_L.extend(ydata_L[0:i].tolist())
             self.ydata_R.extend(ydata_R[0:i].tolist())
@@ -479,7 +499,7 @@ def main(args = None):
     version_string = "Serial Data Viewer by Sebastian Melzer | Version: " + Version().string_firsttag
     print(version_string)
     print("GIT-Tag: ",Version().string_reltag)
-    
+    print("current directory:", os.getcwd())
     if args is None:
         args = sys.argv
     port,baudrate =  'COM4', 115200
