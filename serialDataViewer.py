@@ -31,6 +31,11 @@ import serial.tools.list_ports
 from   pysinewave import SineWave #fuer tonausgabe
 import warnings #supress np warnings
 import os
+import time
+import datetime
+from inspect import currentframe, getframeinfo
+
+frameinfo = getframeinfo(currentframe())
 
 
 def check_write_permission():
@@ -41,7 +46,7 @@ def check_write_permission():
         os.remove("test.txt")
         write_permition = True
     except Exception as e:
-        print(e)
+        print(getframeinfo(currentframe()).lineno, e)
         write_permition = False
     return write_permition
 
@@ -90,7 +95,7 @@ except Exception:
         
         
 class Scope(object):
-    def __init__(self, ax, maxt, dt, serialPort):
+    def __init__(self, ax, dt, serialPort, x_config="samples"):
         self.sinewave = SineWave(pitch = 5, pitch_per_second = 1000)
         self.serialPort = serialPort
         self.write_permission = check_write_permission()
@@ -105,30 +110,37 @@ class Scope(object):
         self.ax_R.format_coord = make_format(self.ax_R, self.ax_L)
         self.ax_R.tick_params(axis='y', colors='red')
         self.dt = dt
-        self.samples = 500 # wird durch submit uebernommen
+        self.samples = 500 # wird durch submit uebernommen, wird sonst auch als Sekunden interpretiert
         self.npoints = self.samples #sind die waren samples!
         self.gleitt = self.npoints
-        self.maxt = maxt
         self.autoadjust = True
         self.datenausgabe = False
         self.sendetext = "t 165"
         self.dist_bins = 50 #Aufloesung der Verteilungsfunktion
-        self.fft_time = 10 #in ms
-        self.tdata = [0]
+        self.sample_period_duration = 100 #in ms
+        self.tdata_c = [0] #for x-Values in counts
+        self.tdata_t = np.empty(1, dtype='datetime64[us]') #for x-values as timestamp
+        self.x_config = x_config # "samples" or "timestamp"
         self.ydata_L = [0]
         self.ydata_R = [np.nan]
         self.y_mittel_L = [0]
         self.y_mittel_R = [np.nan]
-        self.line_ymittel_L = Line2D(self.tdata, self.y_mittel_L, color="blue", linestyle="--")
-        self.line_ymittel_R = Line2D(self.tdata, self.y_mittel_R, color="red" , linestyle="--")
-        self.line_yval_L = Line2D(self.tdata, self.ydata_L, color="blue")
-        self.line_yval_R = Line2D(self.tdata, self.ydata_R, color="red")
+        if(self.x_config=="samples"):    
+            x_arr = self.tdata_c
+            self.ax_L.set_xlim(0, self.npoints)
+        else:
+            x_arr = self.tdata_t
+            now=np.datetime64(datetime.datetime.now(), "us")
+            self.ax_L.set_xlim(now, now + np.timedelta64(self.sample_period_duration*self.samples,"ms"))
+        self.line_ymittel_L = Line2D(x_arr, self.y_mittel_L, color="blue", linestyle="--")
+        self.line_ymittel_R = Line2D(x_arr, self.y_mittel_R, color="red" , linestyle="--")
+        self.line_yval_L = Line2D(x_arr, self.ydata_L, color="blue")
+        self.line_yval_R = Line2D(x_arr, self.ydata_R, color="red")
         self.ax_L.add_line(self.line_ymittel_L)
         self.ax_R.add_line(self.line_ymittel_R)
         self.ax_L.add_line(self.line_yval_L)
         self.ax_R.add_line(self.line_yval_R)
         self.ax_L.set_ylim(-.1, self.samples)
-        self.ax_L.set_xlim(0, self.npoints)
         #erase outputdocuments
         #open("data-out.txt","w").close()
         #open("dist-out.txt","w").close()
@@ -138,6 +150,10 @@ class Scope(object):
         self.check_connection()
         self.serial_connect()
         print("write permission: ",self.write_permission)
+        
+    def __del__(self):
+        del self
+        print("bye")
         
     def init_user_elements(self):    
         #die slider
@@ -157,14 +173,18 @@ class Scope(object):
         
         #Eingabezeile 
         self.sent_box =                 TextBox(plt.axes([0.2, 0.95,   0.4, 0.04]), 'Befehl', initial=self.sendetext)
-        self.fft_time_box =             TextBox(plt.axes([0.2, 0.91,   0.4, 0.04]), 'Sampletime ms', initial=str(self.fft_time))
+        self.sample_period_duration_box=TextBox(plt.axes([0.2, 0.91,   0.4, 0.04]), 'Sampletime ms', initial=str(self.sample_period_duration))
         self.dist_bins_box =            TextBox(plt.axes([0.2, 0.87,   0.4, 0.04]), 'N Bins', initial=str(self.dist_bins))
         self.string_strip_before_box =  TextBox(plt.axes([0.2, 0.83,   0.4, 0.04]), 'String after val', initial=self.string_to_strip_before)
         self.string_strip_after_box =   TextBox(plt.axes([0.2, 0.79,   0.4, 0.04]), 'String before val', initial=self.string_to_strip_after)
         self.samples_box =              TextBox(plt.axes([0.25, 0.005, 0.4, 0.04]), 'Samples', initial=str(self.samples))
         self.serial_status_text =       TextBox(plt.axes([0.605, 0.79,   0.345, 0.04]), '')
         #checkbox
-        self.check = CheckButtons(plt.axes([0.72, 0.85, 0.11, 0.14]), ('Y-Auto', 'Data-out', 'Y-Log', 'Ton'), (True, False, False, False))
+        if self.x_config=="samples":
+            checkbox_conf=(True, False, False, False, False)
+        else:
+            checkbox_conf=(True, False, False, False, True)
+        self.check = CheckButtons(plt.axes([0.72, 0.85, 0.11, 0.14]), ('Y-Auto', 'Data-out', 'Y-Log', 'Ton', 'x time'), checkbox_conf)
                
         #Button events
         self.fft_button.on_clicked(self.fft_erstellen)
@@ -181,7 +201,7 @@ class Scope(object):
           
         #Text-Events
         self.sent_box.on_submit(self.textupdate_sent)
-        self.fft_time_box.on_submit(self.textupdate_fft_time)
+        self.sample_period_duration_box.on_submit(self.textupdate_periode_duration)
         self.dist_bins_box.on_submit(self.textupdate_dist_bins)
         self.samples_box.on_submit(self.textupdate_samples)
         
@@ -207,26 +227,26 @@ class Scope(object):
     def textupdate_sent(self, text):
         self.sendetext=text
     
-    def textupdate_fft_time(self, text):
+    def textupdate_periode_duration(self, text):
         try:
-            self.fft_time = int(text)
-            #print("FFT Zeitbasis: ",self.fft_time," ms")
+            self.sample_period_duration = int(text)
+            #print("FFT Zeitbasis: ",self.sample_period_duration," ms")
         except Exception as e:
-            print(e)
+            print(getframeinfo(currentframe()).lineno, e)
         
     def textupdate_dist_bins(self, text):
         try:
             self.dist_bins = int(text)
             #print("Intervalle in Verteilungsfunktion: ",self.dist_bins,)
         except Exception as e:
-            print(e)
+            print(getframeinfo(currentframe()).lineno, e)
     
     def textupdate_samples(self, text):
         try:
             self.samples = int(text)
             #print("Anzahl der Samples: ",self.samples)
         except Exception as e:
-            print(e)
+            print(getframeinfo(currentframe()).lineno, e)
     
     def funktion(self, label) : # Checkbox events
         if label == 'Y-Auto':
@@ -248,7 +268,19 @@ class Scope(object):
                 self.sinewave.play()
             else:
                 self.sinewave.stop()
-    
+        elif label == 'x time':
+            print("switch to time-based X-Axis")
+            time.sleep(2.5)
+            print("switch to time-based X-Axis")
+            
+            self.serial_connect()
+            if self.x_config=="samples":
+                tmp_x_config="timestamp"
+            else:
+                tmp_x_config="samples"
+            self.__init__(self.ax_L, self.dt, self.serialPort, x_config=tmp_x_config)
+            plt.plot()
+            
     def single_autorange(self, u=0):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning) # suppress numpy warnig: "All-NaN axis encountered" raised if empty y-datta is given
@@ -283,7 +315,7 @@ class Scope(object):
     
     def fft_erstellen(self, g=3):
         #print(self.sent_box_fft_time.val)
-        dt = int(self.fft_time)/1000 #samplingtime in sekunden
+        dt = int(self.sample_period_duration)/1000 #samplingtime in sekunden
         fa = 1.0/dt # scan frequency
         Y=np.fft.fft(np.hanning(len(self.ydata_L))*self.ydata_L)
         N = len(Y)
@@ -318,7 +350,7 @@ class Scope(object):
                 print ("werte=",n, file=open("dist-out.txt","a"))
                 print ("patches=",patches, file=open("dist-out.txt","a"))
         except Exception as e:
-            print(e)
+            print(getframeinfo(currentframe()).lineno, e)
         #f.close()
         
         #ax_verteilung.set_title("Verteilung mit sigm: " + str(standartabweichung) + " Varianz: " + str(varianz) + " und Mittelwert: " + str(mittelwert)) 
@@ -342,7 +374,7 @@ class Scope(object):
                 self.serialPort.open()
                 print("connect")
             except Exception as e:
-                print(e)
+                print(getframeinfo(currentframe()).lineno, e)
                 print("-")
                 print("-")
                 print("-")
@@ -368,18 +400,29 @@ class Scope(object):
 
     def reset(self, g=0):
         #2 Daten anhaengen, damit auto x-einstellung funktioniert
-        self.tdata.append(0)
+        self.tdata_c.append(0)
+        self.tdata_t = np.append(self.tdata_t, np.datetime64(datetime.datetime.now(), "us"))
         self.ydata_L.append(np.nanmean(self.ydata_L))
         if len(self.ydata_R) == np.count_nonzero(~np.isnan(self.ydata_L)): # suppress runtimewarning mean over empty array
             self.ydata_R.append(np.nanmean(self.ydata_R))
         else:
             self.ydata_R.append(0)
-        del self.tdata[:-1  ]
+        del self.tdata_c[:-1  ]
+        tmp_tmp=self.tdata_t[-1]
+        self.tdata_t = np.empty(1, dtype='datetime64[us]')
+        self.tdata_t[0]=tmp_tmp
         del self.ydata_L [:-1]
         del self.ydata_R [:-1]
         self.npoints = self.samples
-        self.ax_L.set_xlim(0, self.npoints)
-        self.ax_R.set_xlim(0, self.npoints)
+        if(self.x_config=="samples"):
+            self.ax_L.set_xlim(0, self.npoints)
+            self.ax_R.set_xlim(0, self.npoints)   
+        else:
+            now=np.datetime64(datetime.datetime.now(), "us")
+            upper_range=now + np.timedelta64(np.timedelta64(self.sample_period_duration*self.samples,"ms"),"s")
+            self.ax_L.set_xlim(now,upper_range)
+            self.ax_R.set_xlim(now,upper_range)
+            pass
         self.gleitt=self.npoints
         self.ax_L.figure.canvas.draw()
     
@@ -390,25 +433,26 @@ class Scope(object):
         try: #Check the serial communication
             in_waiting = self.serialPort.inWaiting()
         except Exception as e:
-            #print(e)
+            #print(getframeinfo(currentframe()).lineno, e)
             self.check_connection()
             return self.line_yval_L, self.line_yval_R, self.line_ymittel_L, self.line_ymittel_R
         read_data_len = 1000
         ydata_L = np.empty(read_data_len+1)
         ydata_R = np.empty(read_data_len+1)
+        tdata_t = np.empty(read_data_len+1, dtype='datetime64[us]')
         ydata_L[:] = np.nan
         ydata_R[:] = np.nan
-        
+        #tdata_t[:] = np.nan
         while (in_waiting != 0) & (i<read_data_len):         
             try:
                 inputline = self.serialPort.readline()# read a '\n' terminated line otherwise timeout
                 in_waiting = self.serialPort.inWaiting()
             except Exception as e:
-                print(e)  
+                print(getframeinfo(currentframe()).lineno, e)  
             try:
                 inputline = inputline.decode('ascii').strip("\r\n")
             except Exception as e:
-                print(e)
+                print(getframeinfo(currentframe()).lineno, e)
 
             #String zuschneiden
             try:
@@ -418,7 +462,7 @@ class Scope(object):
                     inputline=substring_before(inputline, self.string_strip_before_box.text)#self.string_strip_before_box #self.string_to_strip_before
                 #print(inputline)
             except Exception as e:
-                print(e)
+                print(getframeinfo(currentframe()).lineno, e)
             if inputline != "": #weil bestätigung leerer string ist
                 try:
                     if(inputline.find(";")==-1):  # If just one Value   
@@ -439,7 +483,8 @@ class Scope(object):
                 except Exception as e:
                     ydata_L[i] = np.nan
                     ydata_R[i] = np.nan
-                    print(e)
+                    print(getframeinfo(currentframe()).lineno, e)
+                tdata_t[i] = np.datetime64(datetime.datetime.now(), "us")
             else:
                 #print("leerer string, befehl uebertragen!")
                 pass
@@ -450,44 +495,57 @@ class Scope(object):
                 print("too much data", data_available)
             if len(self.ydata_L)==1: #um initialen wert zu entfernen
                 self.ydata_L[0]=ydata_L[0]
-                self.ydata_R[0]=ydata_R[0]        
+                self.ydata_R[0]=ydata_R[0]
 
             if self.datenausgabe == True :
                 ausgabetext = ""
                 for ausg_i in range(i):
-                    ausgabetext += str(ydata_L[ausg_i])+ "\t"+str(ydata_R[ausg_i])+"\r\n"
+                    ausgabetext += str(tdata_t[ausg_i]) + "\t" + str(ydata_L[ausg_i])+ "\t" + str(ydata_R[ausg_i])+"\r\n"
                 print(ausgabetext[:ausgabetext.find("\r")])
                 if(self.write_permission):
-                    print(ausgabetext, file=open("data-out.txt","a"))
-            
+                    print(ausgabetext, file=open("data-out.txt","a"))     
+
             self.ydata_L.extend(ydata_L[0:i].tolist())
             self.ydata_R.extend(ydata_R[0:i].tolist())
-            self.tdata.extend(np.arange(self.tdata[-1]+1,self.tdata[-1]+i+1).tolist())
+            self.tdata_t = np.append(self.tdata_t, tdata_t[0:i])
+            self.tdata_c.extend(np.arange(self.tdata_c[-1]+1,self.tdata_c[-1]+i+1).tolist())
             
             self.ydata_L     = self.ydata_L   [-1 * self.npoints:]   # Auf bereich anpassen
             self.ydata_R     = self.ydata_R   [-1 * self.npoints:]   # Auf bereich anpassen
-            self.tdata     = self.tdata   [-1 * self.npoints:]   # Auf bereich anpassen
-            
-        if self.tdata[-1] > self.gleitt:  # reset the arrays
-            self.gleitt = self.tdata[-1] + self.npoints*0.1
-            self.ax_L.set_xlim(self.tdata[0]+ self.npoints*0.1, self.tdata[-1] + self.npoints*0.1)
-            self.ax_R.set_xlim(self.tdata[0]+ self.npoints*0.1, self.tdata[-1] + self.npoints*0.1)
+            self.tdata_t     = self.tdata_t   [-1 * self.npoints:]   # Auf bereich anpassen
+            self.tdata_c     = self.tdata_c   [-1 * self.npoints:]   # Auf bereich anpassen
+
+        if self.tdata_c[-1] > self.gleitt:  # reset the arrays
+            self.gleitt = self.tdata_c[-1] + self.npoints*0.1
+            if(self.x_config=="samples"):
+                xmin=self.tdata_c[0]+ self.npoints*0.1
+                xmax=self.tdata_c[-1] + self.npoints*0.1          
+            else:
+                delta= np.timedelta64(int(self.samples*self.sample_period_duration*0.1), "ms")
+                xmin=self.tdata_t[0]+ delta
+                xmax=self.tdata_t[-1] + delta
+            self.ax_L.set_xlim(xmin,xmax)
+            self.ax_R.set_xlim(xmin,xmax)
             if self.autoadjust == True :
                 self.range_anpassen(self)
             else:
                 #self.ax_L.set_ylim(10 ** (self.skalierung_ymin.val/100), 10 ** (self.skalierung_ymax.val/100))
                 pass
             self.ax_L.figure.canvas.draw()
-        if len(self.tdata)<self.samples and len(self.tdata)%int(self.samples/10): #for the initial filling
+        if len(self.tdata_c)<self.samples and len(self.tdata_c)%int(self.samples/10): #for the initial filling
             if self.autoadjust == True :
                 self.range_anpassen(self)
                 self.ax_L.figure.canvas.draw()
+        if(self.x_config=="samples"):    
+            x_arr = self.tdata_c
+        else:
+            x_arr = self.tdata_t
         
         #Mittelwertbildung
-        self.line_ymittel_L.set_data(self.tdata, [np.nanmean(self.ydata_L)])
-        self.line_ymittel_R.set_data(self.tdata, [numpy_nan_mean(self.ydata_R)])
-        self.line_yval_L.set_data(self.tdata, self.ydata_L)
-        self.line_yval_R.set_data(self.tdata, self.ydata_R)
+        self.line_ymittel_L.set_data(x_arr, [np.nanmean(self.ydata_L)])
+        self.line_ymittel_R.set_data(x_arr, [numpy_nan_mean(self.ydata_R)])
+        self.line_yval_L.set_data(x_arr, self.ydata_L)
+        self.line_yval_R.set_data(x_arr, self.ydata_R)
         
         return self.line_yval_L, self.line_yval_R, self.line_ymittel_L, self.line_ymittel_R
 
@@ -516,7 +574,7 @@ def main(args = None):
     fig, ax = plt.subplots(num=version_string)
     fig.subplots_adjust(bottom=0.15, top=0.78)
     
-    scope = Scope(ax, 10, 0.01, serial_port_connection)
+    scope = Scope(ax, 0.01, serial_port_connection)
     
     ani = animation.FuncAnimation(fig, scope.update, interval=50, blit=True, save_count=500)
     #ani2 = animation.FuncAnimation(fig, scope.range_anpassen, interval=1000, blit=True, save_count=500)
@@ -526,7 +584,7 @@ def main(args = None):
     ax.minorticks_on()
     plt.show()
     
-    return "das Programm ist nun zu ende"
+    return "Das Programm ist nun zu ende"
 
 if __name__ == '__main__':
     
