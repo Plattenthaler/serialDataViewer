@@ -8,7 +8,7 @@ shutil.rmtree("dist", ignore_errors=True) #remove build directories
 
 if os.name == "nt":
 	print("Using Windwos commands")
-	PyInstaller.__main__.run([
+	result = PyInstaller.__main__.run([
 		'windows_main.spec'
 	])
 # if os.name == "posix":
@@ -16,3 +16,7 @@ if os.name == "nt":
 	# PyInstaller.__main__.run([
 		# 'linux_main.spec'
 	# ])
+	print("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+	print("Pyinstaler Returnvalue: ",result)
+	print("Fertig, zum beenden Enter, Enter to exit")
+	input()
