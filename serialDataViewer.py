@@ -50,6 +50,28 @@ def check_write_permission():
         write_permition = False
     return write_permition
 
+#
+# Function wich formates the floats to :
+# >10 k 
+# test with:
+#   testarr = [-0.000000000005, 0.000000000005, 0.0000000186464684, 0.005189641551, 0.016514, 0.11111111111,1.6546874565, 78.6854684646, 569.646854644654684, -4000.95454, 92548.123456, 7.64153513e10]
+#   format_float(10**(np.random.random()*10-5)*(np.random.random()-0.5), 8)
+def format_float(val, number_of_characters):
+    if np.sign(val)>0:
+        string = "+"
+    else:
+        string = "-"
+    val = np.abs(val)
+    exp = int(np.log10(val))
+    if (exp > 4) or (exp < -2):
+        #format scientific
+        return string + np.format_float_scientific(val, precision=number_of_characters-7, unique=True, trim='k', sign=False, pad_left=None, exp_digits=None, min_digits=None)
+    else:
+        if exp < 0:
+            exp = 0
+        return string+str(round(val, number_of_characters-exp-2))
+    
+
 def substring_after(s, delim):
     return s.partition(delim)[2]
 
@@ -62,26 +84,6 @@ def numpy_nan_mean(a):
         return np.NaN 
     else:
         return np.nanmean(a)
-
-# Mouse tracking diplay left and right values in navigation bar for datetime64
-# # https://stackoverflow.com/questions/21583965/matplotlib-cursor-value-with-two-axes/53678689
-def make_format(current, other):
-    # current and other are axes
-    def format_coord(x, y):
-        # x, y are data coordinates
-        # convert to display coords
-        display_coord = current.transData.transform((x,y))
-        inv = other.transData.inverted()
-        # convert back to data coords with respect to ax
-        ax_coord = inv.transform(display_coord)
-        coords = [ax_coord, (x, y)]
-        string = str(round(x,2))+ " : "
-        #print(coords)
-        for x_, y_  in coords:
-            string += str(round(y_, 3)) + "; "
-        return string
-
-    return format_coord    
 
 try:
     from version import Version
@@ -107,7 +109,7 @@ class Scope(object):
         self.ax_L = ax
         self.ax_L.tick_params(axis='y', colors='blue')
         self.ax_R = self.ax_L.twinx()
-        self.ax_R.format_coord = make_format(self.ax_R, self.ax_L)
+        self.ax_R.format_coord = self.make_format(self.ax_R, self.ax_L)
         self.ax_R.tick_params(axis='y', colors='red')
         self.dt = dt
         self.samples = 500 # wird durch submit uebernommen, wird sonst auch als Sekunden interpretiert
@@ -154,6 +156,29 @@ class Scope(object):
     def __del__(self):
         del self
         print("bye")
+       
+        # Mouse tracking diplay left and right values in navigation bar for datetime64
+    # # https://stackoverflow.com/questions/21583965/matplotlib-cursor-value-with-two-axes/53678689
+    def make_format(self, current, other):
+        # current and other are axes
+        def format_coord(x, y):
+            # x, y are data coordinates
+            # convert to display coords
+            display_coord = current.transData.transform((x,y))
+            inv = other.transData.inverted()
+            # convert back to data coords with respect to ax
+            ax_coord = inv.transform(display_coord)
+            coords = [ax_coord, (x, y)]
+            if(self.x_config == "samples"):
+                string = format_float(x, 10)+ " : "
+            else:
+                string = str(np.datetime64(int(x*24*60*60*1000), 'ms')) + " : "
+            #print(coords)
+            for x_, y_  in coords:
+                string += format_float(y_, 10) + "; "
+            return string
+
+        return format_coord    
         
     def init_user_elements(self):    
         #die slider
